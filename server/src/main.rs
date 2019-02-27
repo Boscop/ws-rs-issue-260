@@ -1,14 +1,31 @@
 use ws::*;
 
 fn main() {
-    listen("127.0.0.1:9595", |sender| {
-        Client { sender }
+    listen("127.0.0.1:9595", |_sender| {
+        Client
     }).unwrap();
 }
 
-struct Client {
-    sender: ws::Sender,
+use std::fmt;
+use std::net::ToSocketAddrs;
+
+pub fn listen<A, F, H>(addr: A, factory: F) -> Result<()>
+where
+    A: ToSocketAddrs + fmt::Debug,
+    F: FnMut(ws::Sender) -> H,
+    H: Handler,
+{
+    let ws = Builder::new()
+        .with_settings(Settings {
+            max_connections: 10, // any value will cause connecting clients above it to hang!
+            ..Default::default()
+        })
+        .build(factory)?;
+    ws.listen(addr)?;
+    Ok(())
 }
+
+struct Client;
 
 impl Handler for Client {
     fn on_error(&mut self, err: Error) {
@@ -23,12 +40,9 @@ impl Handler for Client {
         println!("disconnected: code: {:?}, reason: {}", code, reason);
     }
 
-    fn on_request(&mut self, _request: &Request) -> Result<Response> {
-        // this works
-        // return Err(Error::new(ErrorKind::Capacity, "custom error"));
-
-        // this makes client hang at full cpu usage
-        return Err(Error::new(ErrorKind::Io(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "Connection refused")), "CONNECTION REFUSED"));
+    fn on_request(&mut self, req: &Request) -> Result<Response> {
+        println!("on_request {:?}", req.client_addr());
+        Response::from_request(req)
     }
 
     fn on_open(&mut self, h: Handshake) -> Result<()> {

@@ -1,10 +1,33 @@
+use std::env;
+use std::str;
+use std::thread;
+
 use ws::*;
 
 fn main() {
-    connect("ws://127.0.0.1:9595", |_sender| {
-        println!("connect");
-        Server
-    }).unwrap()
+    let client_count = env::args()
+        .nth(1)
+        .map_or(100, |s| s.parse().expect("client_count"));
+    let mut threads = vec![];
+    for i in 0..client_count {
+        threads.push(
+            thread::Builder::new()
+                .name(format!("ws_client {}", i))
+                .spawn(move || {
+                    println!("spawn {}", i);
+                    connect("ws://127.0.0.1:9595", |_sender| {
+                        println!("connect {}", i);
+                        Server
+                    })
+                    .unwrap();
+                    println!("terminating {}", i);
+                })
+                .unwrap(),
+        );
+    }
+    for thread in threads {
+        let _ = thread.join();
+    }
 }
 
 struct Server;
